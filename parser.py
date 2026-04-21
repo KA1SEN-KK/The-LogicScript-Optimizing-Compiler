@@ -3,8 +3,6 @@ import json
 import sys
 from typing import Optional
 
-# 我稍微调整了一下我前面注释，然后phase1我把message加上了，你看我写的message符不符合你的设想
-# 然后我现在觉得有这个框架在我们后面的也可以直接开始做了，应该不用one by one
 
 """
 For error.
@@ -106,7 +104,7 @@ def process_variable_name(name: str) -> Optional[str]:
 	"""Used for mapping variable names to tokens.
 	Only single-letter variables are allowed."""
 
-	if len(name) == 1 and name.isalpha():
+	if len(name) == 1 and name.isalpha() and name.islower():
 		return "VAR_" + name.upper()
 	else:
 		return None

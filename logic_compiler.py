@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 import sys
 from typing import Optional
@@ -30,13 +31,6 @@ class ParseError(CompilerError):
 
 	def __init__(self, line: int, message: str = "Syntax error") -> None:
 		super().__init__("phase_2_parser", line, message)
-
-
-class OptimizationError(CompilerError):
-	"""Raised when optimization fails."""
-
-	def __init__(self, line: int, message: str = "Optimization error") -> None:
-		super().__init__("phase_3_optimizer", line, message)
 
 
 class ExecutionError(CompilerError):
@@ -83,7 +77,7 @@ For the detailed 4 phases.
 # let r = (NOT ((NOT p) AND q))
 # if r then print p
 
-token_map = {
+TOKEN_MAP = {
 	"let": "LET",
 	"if": "IF",
 	"then": "THEN",
@@ -104,7 +98,7 @@ def process_variable_name(name: str) -> Optional[str]:
 	"""Used for mapping variable names to tokens.
 	Only single-letter variables are allowed."""
 
-	if len(name) == 1 and name.isalpha():
+	if len(name) == 1 and name.isalpha() and name.islower():
 		return "VAR_" + name.upper()
 	else:
 		return None
@@ -122,8 +116,8 @@ def run_lexer_phase(codes: list[str]) -> list[dict]:
 			for ch in word:
 				if ch in ("(", ")"):
 					if buf:
-						if buf in token_map:
-							cur.append(token_map[buf])
+						if buf in TOKEN_MAP:
+							cur.append(TOKEN_MAP[buf])
 						else:
 							var_token = process_variable_name(buf)
 							if var_token:
@@ -131,12 +125,12 @@ def run_lexer_phase(codes: list[str]) -> list[dict]:
 							else:
 								raise LexicalError(i + 1, message = f"Lexical error: Invalid token '{buf}'")
 						buf = ""
-					cur.append(token_map[ch])
+					cur.append(TOKEN_MAP[ch])
 				else:
 					buf += ch
 			if buf:
-				if buf in token_map:
-					cur.append(token_map[buf])
+				if buf in TOKEN_MAP:
+					cur.append(TOKEN_MAP[buf])
 				else:
 					var_token = process_variable_name(buf)
 					if var_token:
@@ -377,11 +371,238 @@ def run_optimizer_phase(parser_output: list[dict]) -> tuple[list[dict], list[dic
 
 
 def optimize_ast(ast: list, line_number: int):
-	"""Placeholder optimizer entry.
+	"""Optimize one parsed AST node.
 
-	Replace with your actual optimizer integration.
+	Recursion is centralized in this function and its helpers.
+	Rule functions only rewrite the current node.
 	"""
-	return ast
+	return _optimize_node(ast)
+
+
+def _optimize_node(node):
+	"""Optimize statements and expressions with a single traversal."""
+	if not isinstance(node, list) or not node:
+		return node	
+
+	tag = node[0]
+
+	if tag == "LET" and len(node) == 3:
+		return ["LET", node[1], _optimize_expression_recursively(node[2])]
+
+	if tag == "IF" and len(node) == 3:
+		condition = _optimize_expression_recursively(node[1])
+		statement = _optimize_node(node[2])
+		return ["IF", condition, statement]
+
+	if tag == "PRINT" and len(node) == 2:
+		return node
+
+	return _optimize_expression_recursively(node)
+
+def _optimize_expression_recursively(node: list):
+
+	if not isinstance(node, list) or not node:
+		return node
+	
+	for i in range(len(node)):
+		if isinstance(node[i], list):
+			node[i] = _optimize_expression_recursively(node[i])
+	
+	return _optimize_expression(node)
+
+def _optimize_expression(expr):
+	"""Optimize expression nodes bottom-up until no more optimizations apply.
+	(Maximum 64 iterations to prevent stack overflow from infinite loops.)
+	"""
+	if not isinstance(expr, list) or not expr:
+		return expr
+
+	rules = [
+		(_implication_elimination, True), # Applied first to prevent missing optimization opportunities
+		(_de_morgan_law, True),
+		(_double_negative_law, False),
+		(_normalization_optimization, False),
+		(_idempotent_law, False),
+		(_identity_law, False),
+		(_negation_law, False),
+		(_universal_bound_law, False),
+		(_absorption_law, False),
+		(_negation_of_true_false, False),
+	]
+
+	max_iterations = 64
+	for _ in range(max_iterations): # To ensure no stack overflow
+		changed = False
+
+		for rule_fn, is_expanding in rules:
+			before = copy.deepcopy(expr)
+			rule_result = rule_fn(expr)
+			if rule_result is not None:
+				expr = rule_result
+
+			if expr != before:
+				changed = True
+				if is_expanding:
+					expr = _optimize_expression_recursively(expr)
+
+		if not changed:
+			break
+
+	return expr
+
+# The following are the individual optimization rules. 
+# Each takes an expression node and returns a new optimized node if applicable, or None if no optimization applies.
+def _implication_elimination(expr):
+	"""Apply the implication elimination rule: x IMPLIES y  ===>  (NOT x) OR y"""
+	if isinstance(expr, list) and len(expr) == 3 and expr[0] == "IMPLIES":
+		return ["OR", ["NOT", expr[1]], expr[2]]
+	return None
+
+def _double_negative_law(expr):
+	"""Apply the double negative law: NOT (NOT x)  ===>  x"""
+	if isinstance(expr, list) and len(expr) == 2 and expr[0] == "NOT":
+		subexpr = expr[1]
+		if isinstance(subexpr, list) and len(subexpr) == 2 and subexpr[0] == "NOT":
+			return subexpr[1]
+	return None
+
+def _is_negation_pair(left, right) -> bool:
+	"""Return whether two expressions are complements of each other."""
+	if isinstance(left, list) and len(left) == 2 and left[0] == "NOT" and left[1] == right:
+		return True
+	if isinstance(right, list) and len(right) == 2 and right[0] == "NOT" and right[1] == left:
+		return True
+	return False
+
+def _idempotent_law(expr):
+	"""Apply idempotent laws: x AND x => x, x OR x => x."""
+	if isinstance(expr, list) and len(expr) == 3 and expr[0] in ("AND", "OR"):
+		if expr[1] == expr[2]:
+			return expr[1]
+	return None
+
+def _identity_law(expr):
+	"""Apply identity laws: x AND TRUE => x, x OR FALSE => x."""
+	if isinstance(expr, list) and len(expr) == 3:
+		op, left, right = expr[0], expr[1], expr[2]
+		if op == "AND":
+			if left == "TRUE":
+				return right
+			if right == "TRUE":
+				return left
+		if op == "OR":
+			if left == "FALSE":
+				return right
+			if right == "FALSE":
+				return left
+	return None
+
+def _negation_law(expr):
+	"""Apply complement laws: x AND NOT x => FALSE, x OR NOT x => TRUE."""
+	if isinstance(expr, list) and len(expr) == 3:
+		op, left, right = expr[0], expr[1], expr[2]
+		if _is_negation_pair(left, right):
+			if op == "AND":
+				return "FALSE"
+			if op == "OR":
+				return "TRUE"
+	return None
+
+def _universal_bound_law(expr):
+	"""Apply bound laws: x AND FALSE => FALSE, x OR TRUE => TRUE."""
+	if isinstance(expr, list) and len(expr) == 3:
+		op, left, right = expr[0], expr[1], expr[2]
+		if op == "AND" and (left == "FALSE" or right == "FALSE"):
+			return "FALSE"
+		if op == "OR" and (left == "TRUE" or right == "TRUE"):
+			return "TRUE"
+	return None
+
+def _absorption_law(expr):
+	"""Apply absorption laws."""
+	if not (isinstance(expr, list) and len(expr) == 3):
+		return None
+
+	op, left, right = expr[0], expr[1], expr[2]
+
+	if op == "OR":
+		if isinstance(right, list) and len(right) == 3 and right[0] == "AND":
+			if right[1] == left or right[2] == left:
+				return left
+		if isinstance(left, list) and len(left) == 3 and left[0] == "AND":
+			if left[1] == right or left[2] == right:
+				return right
+
+	if op == "AND":
+		if isinstance(right, list) and len(right) == 3 and right[0] == "OR":
+			if right[1] == left or right[2] == left:
+				return left
+		if isinstance(left, list) and len(left) == 3 and left[0] == "OR":
+			if left[1] == right or left[2] == right:
+				return right
+
+	return None
+
+def _negation_of_true_false(expr):
+	"""Apply NOT TRUE/FALSE simplification."""
+	if isinstance(expr, list) and len(expr) == 2 and expr[0] == "NOT":
+		if expr[1] == "TRUE":
+			return "FALSE"
+		if expr[1] == "FALSE":
+			return "TRUE"
+	return None
+
+def _de_morgan_law(expr):
+	"""Apply De Morgan laws on NOT over binary operators."""
+	if isinstance(expr, list) and len(expr) == 2 and expr[0] == "NOT":
+		subexpr = expr[1]
+		if isinstance(subexpr, list) and len(subexpr) == 3:
+			op, left, right = subexpr[0], subexpr[1], subexpr[2]
+			if op == "AND":
+				return ["OR", ["NOT", left], ["NOT", right]]
+			if op == "OR":
+				return ["AND", ["NOT", left], ["NOT", right]]
+	return None
+
+def _build_binary_expression(operator: str, terms: list):
+	"""Rebuild a binary expression from flattened terms."""
+	current = terms[0]
+	for term in terms[1:]:
+		current = [operator, current, term]
+	return current
+
+# 可继续修改
+def _normalization_optimization(expr):
+	"""Flatten nested OR/AND expressions and remove duplicate terms."""
+	if not (isinstance(expr, list) and len(expr) == 3 and expr[0] in ("AND", "OR")):
+		return None
+
+	operator = expr[0]
+	flattened_terms = []
+
+	def _collect_terms(node):
+		if isinstance(node, list) and len(node) == 3 and node[0] == operator:
+			_collect_terms(node[1])
+			_collect_terms(node[2])
+		else:
+			flattened_terms.append(node)
+
+	_collect_terms(expr)
+
+	unique_terms = []
+	for term in flattened_terms:
+		if term not in unique_terms:
+			unique_terms.append(term)
+
+	if len(unique_terms) == 1:
+		return unique_terms[0]
+
+	normalized_expr = _build_binary_expression(operator, unique_terms)
+	if normalized_expr != expr and len(unique_terms) < len(flattened_terms):
+		return normalized_expr
+
+	return None
+
 
 # ---------------------------------
 # Phase 4: Verification & Execution
