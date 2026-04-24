@@ -54,7 +54,7 @@ For io.
 
 def read_source_file(input_filename: str) -> list[str]:
 	"""Read source lines from the input file."""
-	with open(input_filename, "r") as file:
+	with open(input_filename, "r",encoding="utf-8") as file:
 		return file.readlines()
 
 
@@ -605,36 +605,236 @@ def _normalization_optimization(expr):
 
 
 # ---------------------------------
-# Phase 4: Verification & Execution
+# phase4.
 # ---------------------------------
 
-def run_execution_phase(
-	optimizer_output: list[dict],
-	verifications_seed: list[dict],
+def evaluate_ast(ast: object, state: dict[str, str], line_number: int) -> str:
+    """evaluate AST boolean value
+
+     AST（string+list） state    line_number
+
+    ExecutionError: undefined variable or invalid AST
+    """
+    # true/false   VAR
+    if isinstance(ast, str):
+        if ast in ("TRUE", "FALSE"):
+            return ast
+        if ast.startswith("VAR_"):
+            if ast not in state:
+                raise ExecutionError(line_number, f"Execution error: Undefined variable '{ast}'")
+            return state[ast]
+        raise ExecutionError(line_number, f"Execution error: Invalid AST node '{ast}'")
+
+    #list
+    if not isinstance(ast, list) or len(ast) < 2:
+        raise ExecutionError(line_number, "Execution error: Invalid compound AST structure")
+
+    operator = ast[0]
+
+    # non-operation
+    if operator == "NOT":
+        if len(ast) != 2:
+            raise ExecutionError(line_number, "Execution error: Invalid NOT operation")
+        operand_val = evaluate_ast(ast[1], state, line_number)
+        return "FALSE" if operand_val == "TRUE" else "TRUE"
+
+    # AND、OR、IMPLIES
+    if operator in ("AND", "OR", "IMPLIES"):
+        if len(ast) != 3:
+            raise ExecutionError(line_number, f"Execution error: Invalid {operator} operation")
+        left_val = evaluate_ast(ast[1], state, line_number)
+        right_val = evaluate_ast(ast[2], state, line_number)
+
+        if operator == "AND":
+            return "TRUE" if (left_val == "TRUE" and right_val == "TRUE") else "FALSE"
+        if operator == "OR":
+            return "TRUE" if (left_val == "TRUE" or right_val == "TRUE") else "FALSE"
+        if operator == "IMPLIES":
+            # 蕴含真值表：T->T=T, T->F=F, F->T=T, F->F=T
+            return "FALSE" if (left_val == "TRUE" and right_val == "FALSE") else "TRUE"
+
+    raise ExecutionError(line_number, f"Execution error: Unknown operator '{operator}'")
+
+
+def extract_variables(ast: object) -> set[str]:
+    #extract all variables
+    variables = set()
+
+    if isinstance(ast, str):
+        if ast.startswith("VAR_"):
+            variables.add(ast)
+        return variables
+
+    if isinstance(ast, list):
+        for node in ast:
+            variables.update(extract_variables(node))
+
+    return variables
+
+
+def verify_equivalence(
+    original_ast: list,
+    optimized_ast: list,
+    line_number: int=0,
 ) -> dict:
-	"""Execute the optimized AST and return the final phase-4 structure."""
-	verifications = []
-	final_state_dictionary: dict[str, str] = {}
-	printed_output = []
+    """Test whether the original AST and the optimized AST are logically equivalent
 
-	# Placeholder verification step
-	for item in verifications_seed:
-		verifications.append({
-			"line": item["line"],
-			"variables_tested": [],
-			"ast_original_column": [],
-			"ast_optimized_column": [],
-			"is_equivalent": "TRUE",
-		})
+    generate 2ⁿ rows truth table，and compare
 
-	# Placeholder execution step
-	# Replace this with real evaluator logic later.
+    original_ast optimized_ast line_number
 
-	return {
-		"verifications": verifications,
-		"final_state_dictionary": final_state_dictionary,
-		"printed_output": printed_output,
-	}
+    Returns a verification dictionary in the required JSON format.。
+    """
+    # Extract all unique variables from the two ASTs.
+    original_vars = extract_variables(original_ast)
+    optimized_vars = extract_variables(optimized_ast)
+    all_vars = sorted(original_vars.union(optimized_vars))
+    num_vars = len(all_vars)
+
+    ast_original_column = []
+    ast_optimized_column = []
+    is_equivalent = True
+
+    # generate 2ⁿ rows truth table，and compare
+    for i in range(2 ** num_vars-1,-1,-1):
+        state = {}
+        for j in range(num_vars):
+            # Generate TRUE/FALSE values using bitwise operations.
+            bit = (i >> (num_vars - 1 - j)) & 1
+            state[all_vars[j]] = "TRUE" if bit else "FALSE"
+
+        # calculate two AST
+        try:
+            orig_result = evaluate_ast(original_ast, state, line_number)
+            opt_result = evaluate_ast(optimized_ast, state, line_number)
+        except ExecutionError:
+            # If the calculation fails during verification, mark it as not equivalent.
+            is_equivalent = False
+            orig_result = "FALSE"
+            opt_result = "TRUE"
+
+        ast_original_column.append(orig_result)
+        ast_optimized_column.append(opt_result)
+
+        # test the equivalence
+        if orig_result != opt_result:
+            is_equivalent = False
+
+    return {
+        "line": line_number,
+        "variables_tested": all_vars,
+        "ast_original_column": ast_original_column,
+        "ast_optimized_column": ast_optimized_column,
+        "is_equivalent": "TRUE" if is_equivalent else "FALSE",
+    }
+
+
+def execute_statement(
+    ast: list,
+    state: dict[str, str],
+    line_number: int,
+) -> Optional[str]:
+    """Execute a single statement AST.
+
+        Returns the output string for a PRINT statement; otherwise, returns None.
+    """
+    if not isinstance(ast, list) or len(ast) < 2:
+        raise ExecutionError(line_number, "Execution error: Invalid statement AST")
+
+    statement_type = ast[0]
+
+    # LET
+    if statement_type == "LET":
+        if len(ast) != 3:
+            raise ExecutionError(line_number, "Execution error: Invalid LET statement")
+        var_token = ast[1]
+        if not (isinstance(var_token, str) and var_token.startswith("VAR_")):
+            raise ExecutionError(line_number, "Execution error: Invalid variable in LET statement")
+        expr_result = evaluate_ast(ast[2], state, line_number)
+        state[var_token] = expr_result
+        return None
+
+    # IF
+    if statement_type == "IF":
+        if len(ast) != 3:
+            raise ExecutionError(line_number, "Execution error: Invalid IF statement")
+        condition_result = evaluate_ast(ast[1], state, line_number)
+        if condition_result == "TRUE":
+            return execute_statement(ast[2], state, line_number)
+        return None
+
+    # PRINT
+    if statement_type == "PRINT":
+        if len(ast) != 2:
+            raise ExecutionError(line_number, "Execution error: Invalid PRINT statement")
+        var_token = ast[1]
+        if not (isinstance(var_token, str) and var_token.startswith("VAR_")):
+            raise ExecutionError(line_number, "Execution error: Invalid variable in LET statement")
+        if var_token not in state:
+            raise ExecutionError(line_number, f"Execution error: Undefined variable in PRINT statement '{var_token}'")
+        return state[var_token]
+
+    raise ExecutionError(line_number, f"Execution error: Unknown statement type '{statement_type}'")
+
+
+def run_execution_phase(
+    optimizer_output: list[dict],
+    verifications_seed: list[dict]=[],
+) -> dict:
+    """Executes the optimized AST and returns the final Phase 4 structure.
+
+
+    optimizer_output: A list of optimized AST records from Phase 3.
+    verifications_seed: A list of validation metadata from Phase 3.
+
+    return:
+        The final Phase 4 dictionary complying with the required JSON format.
+    """
+    verifications = []
+    final_state_dictionary: dict[str, str] = {}
+    printed_output = []
+
+    # Perform equivalence verification on all optimized lines.
+    for item in verifications_seed:
+        line_number = item["line"]
+        original_ast = item["original_ast"]
+        optimized_ast = item["optimized_ast"]
+
+        # Extract the expression part from the LET statement for verification.
+        # LET AST：["LET", "VAR_X", statement]
+        if (isinstance(original_ast, list) and len(original_ast) >= 3 and
+                isinstance(optimized_ast, list) and len(optimized_ast) >= 3 and
+                original_ast[0] == "LET" and optimized_ast[0] == "LET"):
+            verification_result = verify_equivalence(
+                original_ast[2],
+                optimized_ast[2],
+                line_number
+            )
+        else:
+            # for non-let we validate the entire expression.
+            verification_result = verify_equivalence(original_ast, optimized_ast, line_number)
+
+        verifications.append(verification_result)
+
+    #  Execute all statements line by line
+    for item in optimizer_output:
+        line_number = item["line"]
+        ast = item["ast"]
+
+        print_result = execute_statement(ast, final_state_dictionary, line_number)
+
+        if print_result is not None:
+            printed_output.append({
+                "line": line_number,
+                "output": print_result,
+            })
+
+    return {
+        "verifications": verifications,
+        "final_state_dictionary": final_state_dictionary,
+        "printed_output": printed_output,
+    }
+
 
 
 """
@@ -692,3 +892,6 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
+
+
+
