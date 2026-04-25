@@ -131,6 +131,15 @@ OPTIMIZATION_CASES = [
         "phase3_15_normalized_then_idempotent.txt",
         [["LET", "VAR_P", ["OR", "VAR_Q", "VAR_R"]]],
     ),
+    (
+        "phase3_16_multiple_line.txt",
+        [
+            ["LET", "VAR_P", "TRUE"],
+            ["LET", "VAR_Q", "FALSE"],
+            ["LET", "VAR_R", ["OR", "VAR_P", ["NOT", "VAR_Q"]]],
+            ["IF", "VAR_R", ["PRINT", "VAR_P"]],
+        ],
+    ),
 ]
 
 
