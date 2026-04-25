@@ -140,6 +140,29 @@ OPTIMIZATION_CASES = [
             ["IF", "VAR_R", ["PRINT", "VAR_P"]],
         ],
     ),
+    (
+        "phase3_17_consensus_theorem.txt",
+        [
+            [
+                "LET",
+                "VAR_P",
+                [
+                    "OR",
+                    ["AND", "VAR_A", "VAR_B"],
+                    ["AND", ["NOT", "VAR_A"], "VAR_C"],
+                ],
+            ],
+            [
+                "LET",
+                "VAR_Q",
+                [
+                    "AND",
+                    ["OR", "VAR_A", "VAR_B"],
+                    ["OR", ["NOT", "VAR_A"], "VAR_C"],
+                ],
+            ],
+        ],
+    ),
 ]
 
 

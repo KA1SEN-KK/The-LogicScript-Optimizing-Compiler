@@ -28,6 +28,19 @@ logic_compiler.py
 
 ## 3.Implementation Pipeline
 
+### (1) Phase 1: Lexical Analysis
+
+This phase will tokenize the LogicScript into formatted tokens line by line. Using the defined Token map.
+
+Examples:
+
+let p = T → 
+let q = F
+let r = (NOT ((NOT p) AND q))
+if r then print p
+
+
+
 ### (2) Phase 2: Syntax Validation and AST Generation
 
 This phase checks whether the token sequence follows the recursive grammar rules and converts each statement into a nested-list AST.
