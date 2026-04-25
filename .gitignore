@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .vscode/
 technical_brief_phase3.md
+input.txt
+output.json
