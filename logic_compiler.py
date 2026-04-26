@@ -351,9 +351,10 @@ def run_optimizer_phase(parser_output: list[dict]) -> tuple[list[dict], list[dic
 
 	for item in parser_output:
 		line_number = item["line"]
-		original_ast = item["ast"]
+		original_ast = copy.deepcopy(item["ast"])
+		working_ast = copy.deepcopy(item["ast"])
 
-		optimized_ast = optimize_ast(original_ast, line_number)
+		optimized_ast = optimize_ast(working_ast, line_number)
 
 		optimized_output.append({
 			"line": line_number,
