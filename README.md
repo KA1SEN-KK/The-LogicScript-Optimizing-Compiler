@@ -37,6 +37,7 @@ You can run this compiler using this command:
 
 ## 4. Example input & output
 
+**input.txt**:
 ```
 let p = T
 let q = F
@@ -44,6 +45,7 @@ let r = (NOT ((NOT p) AND q))
 if r then print p
 ```
 
+**output.json**:
 ```
 {
   "phase_1_lexer": [
