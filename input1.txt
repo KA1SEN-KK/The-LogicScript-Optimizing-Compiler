@@ -1,0 +1,21 @@
+let a = T
+let b = F
+let c = (NOT (NOT a))
+let d = ((a IMPLIES b) OR (NOT (NOT c)))
+let e = ((NOT (a OR b)) OR ((NOT a) AND (NOT b)))
+let f = (((a AND d) OR ((NOT a) AND e)) OR (d AND e))
+let g = (((a OR d) AND ((NOT a) OR e)) AND (d OR e))
+let h = (((f AND (NOT g)) OR (NOT (f OR g))) IMPLIES ((c AND d) OR (NOT e)))
+let i = (((a AND d) AND a) AND (d AND a))
+let j = ((i OR F) AND (NOT (NOT h)))
+if g then print f
+if h then print g
+if (NOT h) then print e
+if (a OR b) then print c
+print a
+print b
+print c
+print d
+print e
+print h
+print j

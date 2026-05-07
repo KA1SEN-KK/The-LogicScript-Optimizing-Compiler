@@ -137,14 +137,14 @@ def run_lexer_phase(codes: list[str]) -> list[dict]:
 						cur.append(var_token)
 					else:
 						raise LexicalError(i + 1, message = f"Lexical error: Invalid token '{buf}'")
-		output.append({"line": i + 1, "token": cur})
+		output.append({"line": i + 1, "tokens": cur})
 	return output
 
 # Example output
-# {'line': 1, 'token': ['LET', 'VAR_P', 'EQ', 'TRUE']}
-# {'line': 2, 'token': ['LET', 'VAR_Q', 'EQ', 'FALSE']}
-# {'line': 3, 'token': ['LET', 'VAR_R', 'EQ', 'L_PAREN', 'NOT', 'L_PAREN', 'L_PAREN', 'NOT', 'VAR_P', 'R_PAREN', 'AND', 'VAR_Q', 'R_PAREN', 'R_PAREN']}
-# {'line': 4, 'token': ['IF', 'VAR_R', 'THEN', 'PRINT', 'VAR_P']}
+# {'line': 1, 'tokens': ['LET', 'VAR_P', 'EQ', 'TRUE']}
+# {'line': 2, 'tokens': ['LET', 'VAR_Q', 'EQ', 'FALSE']}
+# {'line': 3, 'tokens': ['LET', 'VAR_R', 'EQ', 'L_PAREN', 'NOT', 'L_PAREN', 'L_PAREN', 'NOT', 'VAR_P', 'R_PAREN', 'AND', 'VAR_Q', 'R_PAREN', 'R_PAREN']}
+# {'line': 4, 'tokens': ['IF', 'VAR_R', 'THEN', 'PRINT', 'VAR_P']}
 
 # -------------------------------------------
 # Phase 2: Syntax Validation & AST Generation
@@ -167,7 +167,7 @@ def run_parser_phase(lexer_output: list[dict]) -> list[dict]:
 
 	for item in lexer_output:
 		line_number = item["line"]
-		tokens = item["token"]
+		tokens = item["tokens"]
 		ast = parse_line(tokens, line_number)
 
 		phase_output.append({

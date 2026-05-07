@@ -31,7 +31,7 @@ logic_compiler.py
 If your input file and output file are input.txt and ouput.json.
 You can run this compiler using this command:
 
-`python3 logic_compiler.py input.txt output.json`
+`python logic_compiler.py input.txt output.json`
 
 ---
 

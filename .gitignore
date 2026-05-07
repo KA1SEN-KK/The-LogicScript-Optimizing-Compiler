@@ -5,3 +5,5 @@ __pycache__/
 technical_brief_phase3.md
 input.txt
 output.json
+output1.json
+*.pdf
