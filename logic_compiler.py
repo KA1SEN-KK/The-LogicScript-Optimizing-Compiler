@@ -110,6 +110,8 @@ def run_lexer_phase(codes: list[str]) -> list[dict]:
 
 	output = []
 	for i, line in enumerate(codes):
+		if not line.strip():
+			raise LexicalError(i + 1, message=f"Lexical error: Empty line")
 		cur = []  # Token list for the current line
 		for word in line.split():
 			buf = ""  # Buffer to hold the current word being processed
