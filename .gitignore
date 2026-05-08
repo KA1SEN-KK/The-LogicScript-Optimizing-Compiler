@@ -7,3 +7,6 @@ input.txt
 output.json
 output1.json
 *.pdf
+/pre/
+.claude/
+.venv/
